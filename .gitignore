@@ -1,0 +1,20 @@
+# Environments & Secrets
+.env
+*.env
+venv/
+.venv/
+env/
+
+# Python & Django Cache
+__pycache__/
+*.py[cod]
+*.class
+*.sqlite3
+db.sqlite3
+
+# Logs & Docker data
+*.log
+.docker/
+.pytest_cache/
+htmlcov/
+.coverage

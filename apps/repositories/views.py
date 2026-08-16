@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from .models import Repository
 from .serializers import RepositorySerializer, WebhookPayloadSerializer
 from apps.audit_logs.models import AnalysisRun
+from apps.audit_logs.tasks import analyze_code_diff_task
 
 class RepositoryViewSet(viewsets.ModelViewSet):
     serializer_class = RepositorySerializer
@@ -28,7 +29,7 @@ class RepositoryViewSet(viewsets.ModelViewSet):
         
         data = serializer.validated_data
         
-        # Buat record analysis run dengan status PENDING
+        # 1. Buat record PENDING
         run = AnalysisRun.objects.create(
             repository=repository,
             commit_hash=data['commit_hash'],
@@ -37,9 +38,11 @@ class RepositoryViewSet(viewsets.ModelViewSet):
             status=AnalysisRun.StatusChoices.PENDING
         )
 
-        # (Pada Hari ke-3 & 4, langkah ini akan memicu Celery Worker async)
+        # 2. Dispatch Task ke Celery Queue (Non-blocking)
+        analyze_code_diff_task.delay(str(run.id), data['code_diff'])
+
         return Response({
-            "message": "Webhook received successfully. Analysis queued.",
+            "message": "Webhook received successfully. Background analysis dispatched.",
             "analysis_id": str(run.id),
             "status": run.status
         }, status=status.HTTP_202_ACCEPTED)

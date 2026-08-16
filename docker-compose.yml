@@ -36,6 +36,19 @@ services:
       - db
       - redis
 
+  celery_worker:
+    build: .
+    container_name: agent_celery_worker
+    restart: always
+    command: celery -A core worker --loglevel=info
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    depends_on:
+      - db
+      - redis
+
 volumes:
   postgres_data:
   redis_data:

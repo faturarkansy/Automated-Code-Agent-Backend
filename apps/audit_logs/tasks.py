@@ -4,8 +4,9 @@ import hashlib
 from celery import shared_task
 from django.core.cache import cache
 from .models import AnalysisRun
+from .agent.analyzer import CodeAnalysisAgent
 
-@shared_task(bind=True, max_retries=3)
+@shared_task(bind=True, max_retries=2)
 def analyze_code_diff_task(self, analysis_run_id, code_diff):
     try:
         run = AnalysisRun.objects.get(id=analysis_run_id)
@@ -14,36 +15,40 @@ def analyze_code_diff_task(self, analysis_run_id, code_diff):
 
         start_time = time.time()
 
-        # 1. Cek Redis Cache (Semantic/Diff Hash Caching)
+        # 1. Cek Redis Cache
         diff_hash = hashlib.sha256(code_diff.encode()).hexdigest()
         cache_key = f"audit_cache:{diff_hash}"
-        cached_result = cache.get(cache_key)
+        cached_data = cache.get(cache_key)
 
-        if cached_result:
-            result = json.loads(cached_result)
+        if cached_data:
+            result_dict = json.loads(cached_data)
         else:
-            # Simulasi AI processing time (sebelum dihubungkan ke LLM di Hari ke-4)
-            time.sleep(3)
-            result = {
-                "vulnerabilities": ["Unvalidated user input in query param", "Potential SQL Injection"],
-                "patch": "# Sanitized query input implementation",
-                "unit_test": "def test_safe_query(): assert True"
+            # 2. Panggil AI Agent Sungguhan
+            agent = CodeAnalysisAgent()
+            analysis_result = agent.analyze(code_diff=code_diff)
+            
+            # Serialize Pydantic object ke dict
+            result_dict = {
+                "vulnerabilities": [v.model_dump() for v in analysis_result.vulnerabilities],
+                "patch": analysis_result.patch,
+                "unit_test": analysis_result.unit_test
             }
-            # Simpan ke Redis cache selama 24 jam (86400 detik)
-            cache.set(cache_key, json.dumps(result), timeout=86400)
+            
+            # Simpan hasil analisis AI ke Redis cache (24 jam)
+            cache.set(cache_key, json.dumps(result_dict), timeout=86400)
 
         execution_time = int((time.time() - start_time) * 1000)
 
-        # 2. Update Database Record
+        # 3. Update Status & Hasil ke PostgreSQL
         run.status = AnalysisRun.StatusChoices.COMPLETED
-        run.vulnerabilities_found = len(result["vulnerabilities"])
-        run.vulnerability_details = result["vulnerabilities"]
-        run.generated_patch = result["patch"]
-        run.generated_unit_test = result["unit_test"]
+        run.vulnerabilities_found = len(result_dict["vulnerabilities"])
+        run.vulnerability_details = result_dict["vulnerabilities"]
+        run.generated_patch = result_dict["patch"]
+        run.generated_unit_test = result_dict["unit_test"]
         run.execution_time_ms = execution_time
         run.save()
 
-        return f"Analysis {analysis_run_id} completed successfully."
+        return f"Analysis {analysis_run_id} finished by AI Agent in {execution_time}ms"
 
     except Exception as exc:
         run = AnalysisRun.objects.filter(id=analysis_run_id).first()

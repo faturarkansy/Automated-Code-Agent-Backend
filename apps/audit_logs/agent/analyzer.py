@@ -5,7 +5,7 @@ from .schemas import CodeAnalysisResult
 
 class CodeAnalysisAgent:
     def __init__(self):
-        api_key = os.getenv("AQ.Ab8RN6K74WneIbfoKx5dRmMjztIf_9R_7c9YkRvQT8jbCZA7Uw")
+        api_key = os.getenv("GEMINI_API_KEY")
         # Menggunakan model gemini-2.5-flash (atau gemini-1.5-flash-latest)
         self.llm = ChatGoogleGenerativeAI(
             model="gemini-3.6-flash",

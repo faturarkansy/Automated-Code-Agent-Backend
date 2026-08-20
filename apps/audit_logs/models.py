@@ -31,6 +31,9 @@ class AnalysisRun(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    pr_url = models.URLField(max_length=500, blank=True, null=True)
+    pr_number = models.IntegerField(null=True, blank=True)
+
     class Meta:
         ordering = ['-created_at']
 

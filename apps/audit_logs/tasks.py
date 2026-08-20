@@ -6,25 +6,25 @@ from django.core.cache import cache
 from .models import AnalysisRun
 from .agent.analyzer import CodeAnalysisAgent
 from .agent.sandbox import SandboxRunner
+from .agent.github_client import GitHubPRService
 
 @shared_task(bind=True, max_retries=2)
 def analyze_code_diff_task(self, analysis_run_id, code_diff):
     try:
-        run = AnalysisRun.objects.get(id=analysis_run_id)
+        run = AnalysisRun.objects.select_related('repository').get(id=analysis_run_id)
         run.status = AnalysisRun.StatusChoices.IN_PROGRESS
         run.save(update_fields=['status'])
 
         start_time = time.time()
         agent = CodeAnalysisAgent()
 
-        # 1. Analisis Awal dengan LLM
+        # 1. Analisis Diff dengan AI
         analysis_result = agent.analyze(code_diff=code_diff)
-        
         patch = analysis_result.patch
         unit_test = analysis_result.unit_test
         vulnerabilities = [v.model_dump() for v in analysis_result.vulnerabilities]
 
-        # 2. Automated Sandbox Testing & Feedback Loop
+        # 2. Sandbox Testing & Feedback Loop
         run.status = AnalysisRun.StatusChoices.TESTING
         run.save(update_fields=['status'])
 
@@ -35,7 +35,6 @@ def analyze_code_diff_task(self, analysis_run_id, code_diff):
 
         while current_iteration < max_iterations:
             current_iteration += 1
-            # Eksekusi pytest di temporary sandbox
             test_result = SandboxRunner.run_test(patch_code=patch, test_code=unit_test)
             test_passed = test_result["passed"]
             test_output = test_result["output"]
@@ -43,7 +42,6 @@ def analyze_code_diff_task(self, analysis_run_id, code_diff):
             if test_passed:
                 break
             
-            # Jika gagal dan masih ada jatah retry, picu perbaikan mandiri (Self-Healing)
             if current_iteration < max_iterations:
                 corrected_result = agent.fix_patch_and_test(
                     original_diff=code_diff,
@@ -56,9 +54,28 @@ def analyze_code_diff_task(self, analysis_run_id, code_diff):
                 if corrected_result.vulnerabilities:
                     vulnerabilities = [v.model_dump() for v in corrected_result.vulnerabilities]
 
+        # 3. Automated Pull Request Creation (Jika Test Passed & Ada Bug)
+        pr_url = None
+        pr_number = None
+        if test_passed and len(vulnerabilities) > 0:
+            gh_service = GitHubPRService()
+            # Gunakan repo name asli, contoh format: 'owner/repo_name'
+            pr_res = gh_service.create_security_pr(
+                repo_full_name=run.repository.full_name,
+                base_branch=run.branch,
+                commit_hash=run.commit_hash,
+                vulnerabilities=vulnerabilities,
+                patch_code=patch,
+                unit_test_code=unit_test,
+                test_output=test_output
+            )
+            if pr_res.get("success"):
+                pr_url = pr_res.get("pr_url")
+                pr_number = pr_res.get("pr_number")
+
         execution_time = int((time.time() - start_time) * 1000)
 
-        # 3. Simpan Hasil Lengkap ke Database
+        # 4. Simpan Record ke Database
         run.status = AnalysisRun.StatusChoices.COMPLETED
         run.vulnerabilities_found = len(vulnerabilities)
         run.vulnerability_details = vulnerabilities
@@ -67,10 +84,12 @@ def analyze_code_diff_task(self, analysis_run_id, code_diff):
         run.test_passed = test_passed
         run.test_output = test_output
         run.retry_count = current_iteration - 1
+        run.pr_url = pr_url
+        run.pr_number = pr_number
         run.execution_time_ms = execution_time
         run.save()
 
-        return f"Analysis {analysis_run_id} completed with test_passed={test_passed} in {current_iteration} iteration(s)."
+        return f"Analysis {analysis_run_id} completed. PR Created: {pr_url}"
 
     except Exception as exc:
         run = AnalysisRun.objects.filter(id=analysis_run_id).first()

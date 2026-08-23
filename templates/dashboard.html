@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Autonomous Security Agent - Analytics Dashboard</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Phosphor Icons CDN -->
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  </head>
+  <body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased">
+    <!-- Navbar -->
+    <nav
+      class="border-b border-slate-800 bg-slate-900/60 backdrop-blur-md sticky top-0 z-50"
+    >
+      <div
+        class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between"
+      >
+        <div class="flex items-center space-x-3">
+          <div
+            class="w-9 h-9 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold text-xl shadow-lg shadow-indigo-500/30"
+          >
+            <i class="ph-bold ph-shield-check"></i>
+          </div>
+          <div>
+            <h1 class="text-base font-bold text-white tracking-wide">
+              Automated Bug Fixer Agent
+            </h1>
+            <p class="text-xs text-slate-400">
+              Autonomous LLM Code Analysis & Sandbox Verification
+            </p>
+          </div>
+        </div>
+        <div class="flex items-center space-x-3">
+          <a
+            href="/api/v1/audit-runs/"
+            target="_blank"
+            class="text-xs font-medium text-slate-400 hover:text-white px-3 py-1.5 rounded-md border border-slate-700 hover:border-slate-600 transition flex items-center gap-1.5"
+          >
+            <i class="ph ph-brackets-curly"></i> Raw Audit API
+          </a>
+          <button
+            onclick="fetchMetrics()"
+            class="text-xs font-medium bg-indigo-600 hover:bg-indigo-500 text-white px-3.5 py-1.5 rounded-md transition shadow-md shadow-indigo-600/20 flex items-center gap-1.5"
+          >
+            <i class="ph ph-arrows-clockwise" id="refresh-icon"></i> Refresh
+            Data
+          </button>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      <!-- Top Metrics KPI Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <!-- Total Scans -->
+        <div
+          class="bg-slate-900 border border-slate-800 rounded-xl p-5 relative overflow-hidden group hover:border-slate-700 transition"
+        >
+          <div class="flex items-center justify-between">
+            <span
+              class="text-xs font-semibold uppercase tracking-wider text-slate-400"
+              >Total Code Scans</span
+            >
+            <div
+              class="w-8 h-8 rounded-lg bg-slate-800 flex items-center justify-center text-slate-300"
+            >
+              <i class="ph-bold ph-git-commit text-base"></i>
+            </div>
+          </div>
+          <div class="mt-4 flex items-baseline gap-2">
+            <span
+              id="metric-total-scans"
+              class="text-3xl font-extrabold text-white tracking-tight"
+              >-</span
+            >
+            <span class="text-xs text-slate-500">executions</span>
+          </div>
+        </div>
+
+        <!-- Vulnerabilities Found -->
+        <div
+          class="bg-slate-900 border border-slate-800 rounded-xl p-5 relative overflow-hidden group hover:border-slate-700 transition"
+        >
+          <div class="flex items-center justify-between">
+            <span
+              class="text-xs font-semibold uppercase tracking-wider text-slate-400"
+              >Vulnerabilities Detected</span
+            >
+            <div
+              class="w-8 h-8 rounded-lg bg-rose-500/10 text-rose-400 flex items-center justify-center"
+            >
+              <i class="ph-bold ph-bug text-base"></i>
+            </div>
+          </div>
+          <div class="mt-4 flex items-baseline gap-2">
+            <span
+              id="metric-total-vulns"
+              class="text-3xl font-extrabold text-rose-400 tracking-tight"
+              >-</span
+            >
+            <span class="text-xs text-rose-500/70 font-medium"
+              >security bugs</span
+            >
+          </div>
+        </div>
+
+        <!-- PRs Created -->
+        <div
+          class="bg-slate-900 border border-slate-800 rounded-xl p-5 relative overflow-hidden group hover:border-slate-700 transition"
+        >
+          <div class="flex items-center justify-between">
+            <span
+              class="text-xs font-semibold uppercase tracking-wider text-slate-400"
+              >Automated Pull Requests</span
+            >
+            <div
+              class="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center"
+            >
+              <i class="ph-bold ph-git-pull-request text-base"></i>
+            </div>
+          </div>
+          <div class="mt-4 flex items-baseline gap-2">
+            <span
+              id="metric-total-prs"
+              class="text-3xl font-extrabold text-emerald-400 tracking-tight"
+              >-</span
+            >
+            <span class="text-xs text-emerald-500/70 font-medium"
+              >opened on GitHub</span
+            >
+          </div>
+        </div>
+
+        <!-- Test Pass Rate -->
+        <div
+          class="bg-slate-900 border border-slate-800 rounded-xl p-5 relative overflow-hidden group hover:border-slate-700 transition"
+        >
+          <div class="flex items-center justify-between">
+            <span
+              class="text-xs font-semibold uppercase tracking-wider text-slate-400"
+              >Sandbox Pass Rate</span
+            >
+            <div
+              class="w-8 h-8 rounded-lg bg-sky-500/10 text-sky-400 flex items-center justify-center"
+            >
+              <i class="ph-bold ph-check-circle text-base"></i>
+            </div>
+          </div>
+          <div class="mt-4 flex items-baseline gap-2">
+            <span
+              id="metric-pass-rate"
+              class="text-3xl font-extrabold text-sky-400 tracking-tight"
+              >-%</span
+            >
+            <span class="text-xs text-slate-500 font-medium"
+              >verification rate</span
+            >
+          </div>
+        </div>
+      </div>
+
+      <!-- Charts Section -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Severity Distribution Doughnut Chart -->
+        <div
+          class="bg-slate-900 border border-slate-800 rounded-xl p-6 flex flex-col justify-between"
+        >
+          <div>
+            <h2
+              class="text-sm font-semibold text-white tracking-wide flex items-center gap-2"
+            >
+              <i class="ph-bold ph-chart-pie-slice text-indigo-400"></i>
+              Vulnerability Severity Breakdown
+            </h2>
+            <p class="text-xs text-slate-400 mt-1">
+              Classification of security risks detected by the LLM agent.
+            </p>
+          </div>
+          <div class="h-64 mt-4 relative flex items-center justify-center">
+            <canvas id="severityChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Pipeline Status Bar Chart -->
+        <div
+          class="bg-slate-900 border border-slate-800 rounded-xl p-6 flex flex-col justify-between"
+        >
+          <div>
+            <h2
+              class="text-sm font-semibold text-white tracking-wide flex items-center gap-2"
+            >
+              <i class="ph-bold ph-chart-bar text-indigo-400"></i> Pipeline
+              Execution Status
+            </h2>
+            <p class="text-xs text-slate-400 mt-1">
+              Lifecycle distribution across all triggered tasks.
+            </p>
+          </div>
+          <div class="h-64 mt-4 relative flex items-center justify-center">
+            <canvas id="statusChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Additional Performance Summary -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-6">
+        <h2
+          class="text-sm font-semibold text-white tracking-wide mb-4 flex items-center gap-2"
+        >
+          <i class="ph-bold ph-cpu text-indigo-400"></i> Agent System Insights
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+          <div class="p-4 bg-slate-950/60 rounded-lg border border-slate-800">
+            <span class="text-slate-400 block mb-1"
+              >Average Execution Latency</span
+            >
+            <span
+              id="metric-avg-time"
+              class="text-lg font-bold text-white tracking-tight"
+              >- ms</span
+            >
+          </div>
+          <div class="p-4 bg-slate-950/60 rounded-lg border border-slate-800">
+            <span class="text-slate-400 block mb-1"
+              >Active Monitored Repos</span
+            >
+            <span
+              id="metric-total-repos"
+              class="text-lg font-bold text-white tracking-tight"
+              >-</span
+            >
+          </div>
+          <div class="p-4 bg-slate-950/60 rounded-lg border border-slate-800">
+            <span class="text-slate-400 block mb-1"
+              >Feedback Loop Architecture</span
+            >
+            <span class="text-lg font-bold text-emerald-400 tracking-tight"
+              >Active (Max 3 Retries)</span
+            >
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- JavaScript Data Fetching & Chart Rendering -->
+    <script>
+      let severityChartInstance = null;
+      let statusChartInstance = null;
+
+      async function fetchMetrics() {
+        const refreshIcon = document.getElementById("refresh-icon");
+        if (refreshIcon) refreshIcon.classList.add("animate-spin");
+
+        try {
+          const response = await fetch("/api/v1/analytics/metrics/");
+          const data = await response.json();
+
+          // Update KPI Cards
+          document.getElementById("metric-total-scans").innerText =
+            data.total_scans ?? 0;
+          document.getElementById("metric-total-vulns").innerText =
+            data.total_vulnerabilities_found ?? 0;
+          document.getElementById("metric-total-prs").innerText =
+            data.total_prs_created ?? 0;
+          document.getElementById("metric-pass-rate").innerText =
+            (data.test_pass_rate_percentage ?? 0) + "%";
+          document.getElementById("metric-avg-time").innerText =
+            data.avg_execution_time_ms
+              ? (data.avg_execution_time_ms / 1000).toFixed(2) + " s"
+              : "0 s";
+          document.getElementById("metric-total-repos").innerText =
+            data.total_repositories ?? 1;
+
+          // Render Charts
+          renderSeverityChart(data.severity_distribution || {});
+          renderStatusChart(data.status_breakdown || {});
+        } catch (error) {
+          console.error("Error fetching analytics metrics:", error);
+        } finally {
+          if (refreshIcon) {
+            setTimeout(() => refreshIcon.classList.remove("animate-spin"), 600);
+          }
+        }
+      }
+
+      function renderSeverityChart(dist) {
+        const ctx = document.getElementById("severityChart").getContext("2d");
+        if (severityChartInstance) severityChartInstance.destroy();
+
+        const labels = Object.keys(dist);
+        const values = Object.values(dist);
+
+        severityChartInstance = new Chart(ctx, {
+          type: "doughnut",
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                data: values,
+                backgroundColor: ["#ef4444", "#f97316", "#eab308", "#3b82f6"],
+                borderColor: "#0f172a",
+                borderWidth: 2,
+                hoverOffset: 4,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: "bottom",
+                labels: {
+                  color: "#94a3b8",
+                  font: { size: 11 },
+                  boxWidth: 12,
+                },
+              },
+            },
+          },
+        });
+      }
+
+      function renderStatusChart(statusMap) {
+        const ctx = document.getElementById("statusChart").getContext("2d");
+        if (statusChartInstance) statusChartInstance.destroy();
+
+        const labels = Object.keys(statusMap);
+        const values = Object.values(statusMap);
+
+        statusChartInstance = new Chart(ctx, {
+          type: "bar",
+          data: {
+            labels: labels,
+            datasets: [
+              {
+                label: "Audit Runs",
+                data: values,
+                backgroundColor: "#6366f1",
+                borderRadius: 6,
+                borderSkipped: false,
+              },
+            ],
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: { display: false },
+            },
+            scales: {
+              x: {
+                grid: { display: false },
+                ticks: { color: "#94a3b8", font: { size: 10 } },
+              },
+              y: {
+                grid: { color: "#1e293b" },
+                ticks: { color: "#94a3b8", font: { size: 10 }, stepSize: 1 },
+              },
+            },
+          },
+        });
+      }
+
+      // Fetch on initial load
+      document.addEventListener("DOMContentLoaded", fetchMetrics);
+    </script>
+  </body>
+</html>

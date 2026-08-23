@@ -54,14 +54,20 @@ def analyze_code_diff_task(self, analysis_run_id, code_diff):
                 if corrected_result.vulnerabilities:
                     vulnerabilities = [v.model_dump() for v in corrected_result.vulnerabilities]
 
-        # 3. Automated Pull Request Creation (Jika Test Passed & Ada Bug)
+        # 3. Automated Pull Request Creation
         pr_url = None
         pr_number = None
         if test_passed and len(vulnerabilities) > 0:
             gh_service = GitHubPRService()
-            # Gunakan repo name asli, contoh format: 'owner/repo_name'
+            
+            # Format wajib GitHub API: "owner/repo_name"
+            raw_name = getattr(run.repository, "full_name", None) or getattr(run.repository, "name", "")
+            target_repo = raw_name if "/" in raw_name else f"faturarkansy/{raw_name}"
+            if not raw_name:
+                target_repo = "faturarkansy/Automated-Code-Agent-Backend"
+
             pr_res = gh_service.create_security_pr(
-                repo_full_name=run.repository.full_name,
+                repo_full_name=target_repo,
                 base_branch=run.branch,
                 commit_hash=run.commit_hash,
                 vulnerabilities=vulnerabilities,
@@ -69,9 +75,12 @@ def analyze_code_diff_task(self, analysis_run_id, code_diff):
                 unit_test_code=unit_test,
                 test_output=test_output
             )
+            
             if pr_res.get("success"):
                 pr_url = pr_res.get("pr_url")
                 pr_number = pr_res.get("pr_number")
+            else:
+                print(f"[GITHUB PR ERROR]: {pr_res.get('error')}")
 
         execution_time = int((time.time() - start_time) * 1000)
 

@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 import environ
 
@@ -104,3 +105,5 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = TIME_ZONE
+
+GITHUB_ACCESS_TOKEN = os.getenv("GITHUB_ACCESS_TOKEN", "").strip()

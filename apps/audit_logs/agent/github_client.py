@@ -1,13 +1,17 @@
 import os
 import time
-from github import Github, GithubException
+import traceback
+from github import Github, Auth, GithubException
+from django.conf import settings
 
 class GitHubPRService:
     def __init__(self):
-        token = os.getenv("GITHUB_ACCESS_TOKEN", "").strip()
+        token = os.getenv("GITHUB_ACCESS_TOKEN", "").strip() or getattr(settings, "GITHUB_ACCESS_TOKEN", "").strip()
         if not token:
             raise ValueError("GITHUB_ACCESS_TOKEN is missing in environment variables.")
-        self.client = Github(token)
+        
+        auth = Auth.Token(token)
+        self.client = Github(auth=auth)
 
     def create_security_pr(
         self,
@@ -19,27 +23,33 @@ class GitHubPRService:
         unit_test_code: str,
         test_output: str
     ) -> dict:
-        """
-        Membuat branch baru, commit patch dan test, lalu membuka Pull Request otomatis.
-        """
         try:
+            print(f"[GITHUB SERVICE] Step 1: Getting repo '{repo_full_name}'...")
             repo = self.client.get_repo(repo_full_name)
+            print(f"[GITHUB SERVICE] Repo found: {repo.full_name}, default_branch={repo.default_branch}")
             
-            # Ambil referensi branch utama (target base)
-            base_ref = repo.get_branch(base_branch)
-            base_sha = base_ref.commit.sha
+            print(f"[GITHUB SERVICE] Step 2: Resolving branch '{base_branch}'...")
+            try:
+                base_ref = repo.get_branch(base_branch)
+            except GithubException as be:
+                print(f"[GITHUB SERVICE] Branch '{base_branch}' not found ({be.data.get('message', be)}). Falling back to default: '{repo.default_branch}'")
+                base_branch = repo.default_branch
+                base_ref = repo.get_branch(base_branch)
 
-            # Buat nama branch unik
-            short_commit = commit_hash[:7]
+            base_sha = base_ref.commit.sha
+            print(f"[GITHUB SERVICE] Base branch '{base_branch}' SHA: {base_sha}")
+
+            short_commit = commit_hash[:7] if commit_hash else "fix"
             new_branch_name = f"security-fix/{short_commit}-{int(time.time())}"
+            
+            print(f"[GITHUB SERVICE] Step 3: Creating branch '{new_branch_name}'...")
             repo.create_git_ref(ref=f"refs/heads/{new_branch_name}", sha=base_sha)
 
-            # Siapkan commit perubahan kode (patch & test)
             commit_message = f"fix(security): automated patch for commit {short_commit} [AI Agent]"
             
-            # 1. Commit Patch (misal ke security_patch.py atau file target)
+            # 1. Commit Patch
+            print(f"[GITHUB SERVICE] Step 4: Committing security_patch.py...")
             try:
-                # Coba update jika file sudah ada
                 existing_file = repo.get_contents("security_patch.py", ref=new_branch_name)
                 repo.update_file(
                     path="security_patch.py",
@@ -49,7 +59,6 @@ class GitHubPRService:
                     branch=new_branch_name
                 )
             except GithubException:
-                # Buat file baru jika belum ada
                 repo.create_file(
                     path="security_patch.py",
                     message=commit_message,
@@ -58,6 +67,7 @@ class GitHubPRService:
                 )
 
             # 2. Commit Unit Test
+            print(f"[GITHUB SERVICE] Step 5: Committing test_security_patch.py...")
             try:
                 existing_test = repo.get_contents("test_security_patch.py", ref=new_branch_name)
                 repo.update_file(
@@ -75,7 +85,7 @@ class GitHubPRService:
                     branch=new_branch_name
                 )
 
-            # 3. Susun Deskripsi Markdown untuk PR
+            # 3. Susun Deskripsi Markdown PR
             vuln_rows = ""
             for v in vulnerabilities:
                 vuln_rows += f"- **[{v.get('severity', 'UNKNOWN')}] {v.get('title', 'Vulnerability')}** (Line: {v.get('line_number', 'N/A')})\n  {v.get('description', '')}\n"
@@ -92,12 +102,14 @@ class GitHubPRService:
             )
 
             # 4. Buat Pull Request
+            print(f"[GITHUB SERVICE] Step 6: Creating Pull Request to '{base_branch}' from '{new_branch_name}'...")
             pr = repo.create_pull(
                 title=pr_title,
                 body=pr_body,
                 base=base_branch,
                 head=new_branch_name
             )
+            print(f"[GITHUB SERVICE] Pull Request Created Successfully: {pr.html_url}")
 
             return {
                 "success": True,
@@ -106,7 +118,15 @@ class GitHubPRService:
             }
 
         except GithubException as e:
+            traceback.print_exc()
+            msg = e.data.get('message', str(e)) if hasattr(e, 'data') and isinstance(e.data, dict) else str(e)
             return {
                 "success": False,
-                "error": str(e)
+                "error": f"Status {e.status}: {msg}"
+            }
+        except Exception as general_err:
+            traceback.print_exc()
+            return {
+                "success": False,
+                "error": str(general_err)
             }

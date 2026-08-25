@@ -64,11 +64,16 @@ WSGI_APPLICATION = 'core.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': env('POSTGRES_DB', default='agent_db'),
-        'USER': env('POSTGRES_USER', default='postgres_user'),
-        'PASSWORD': env('POSTGRES_PASSWORD', default='postgres_secure_pass'),
-        'HOST': env('POSTGRES_HOST', default='db'),
-        'PORT': env('POSTGRES_PORT', default='5432'),
+        'NAME': os.environ.get('POSTGRES_DB', 'postgres'),
+        'USER': os.environ.get('POSTGRES_USER', 'postgres'),
+        'PASSWORD': os.environ.get('POSTGRES_PASSWORD', ''),
+        'HOST': os.environ.get('POSTGRES_HOST', 'localhost'),
+        'PORT': os.environ.get('POSTGRES_PORT', '6543'),
+        'OPTIONS': {
+            'sslmode': 'require',
+            'connect_timeout': 10,
+            'DISABLE_SERVER_SIDE_CURSORS': True,
+        },
     }
 }
 

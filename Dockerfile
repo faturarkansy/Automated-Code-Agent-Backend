@@ -5,14 +5,18 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Install sistem dependencies untuk psycopg2 & networking check
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
     netcat-traditional \
+    dos2unix \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt /app/
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . /app/
+
+RUN dos2unix /app/start.sh && chmod +x /app/start.sh
+
+CMD ["/bin/sh", "/app/start.sh"]
